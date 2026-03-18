@@ -7,6 +7,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Streamlit Cloud secrets → os.environ 동기화
+import os
+for _k in ["GEMINI_API_KEY", "GROQ_API_KEY", "ANTHROPIC_API_KEY", "PIXABAY_API_KEY", "ELEVENLABS_API_KEY"]:
+    try:
+        if _k in st.secrets:
+            os.environ[_k] = st.secrets[_k]
+    except Exception:
+        pass
+
 from generators import GenerateInput, generate_blog_post, generate_shorts_45s, save_output
 from youtube_uploader import (
     UploadRequest,

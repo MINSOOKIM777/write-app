@@ -114,15 +114,40 @@ def _markdown_to_html(text: str) -> str:
     return "\n".join(result)
 
 
+def _translate_to_english(keyword: str) -> str:
+    """Groq으로 키워드 영어 번역."""
+    try:
+        from groq import Groq as _Groq
+        _key = os.getenv("GROQ_API_KEY", "")
+        if not _key:
+            return keyword
+        c = _Groq(api_key=_key)
+        r = c.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": f"Translate to English for image search (2-3 words only, no explanation): {keyword}"}],
+            max_tokens=20,
+        )
+        return r.choices[0].message.content.strip().strip('"')
+    except Exception:
+        return keyword
+
+
 def _fetch_pixabay_images(keyword: str, count: int = 5) -> list[str]:
     """Pixabay에서 키워드 관련 이미지 URL 반환."""
     api_key = os.getenv("PIXABAY_API_KEY", "")
     if not api_key:
+        try:
+            import streamlit as st
+            api_key = st.secrets.get("PIXABAY_API_KEY", "")
+        except Exception:
+            pass
+    if not api_key:
         return []
     try:
+        en_keyword = _translate_to_english(keyword)
         r = requests.get(
             "https://pixabay.com/api/",
-            params={"key": api_key, "q": keyword, "image_type": "photo", "per_page": count, "lang": "ko"},
+            params={"key": api_key, "q": en_keyword, "image_type": "photo", "per_page": count, "lang": "en"},
             timeout=8,
         )
         hits = r.json().get("hits", [])

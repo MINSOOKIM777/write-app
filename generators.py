@@ -193,10 +193,75 @@ TITLE: (제목)
         return None
 
 
+def _generate_blog_with_groq(inp: GenerateInput) -> tuple[str, str] | None:
+    """Groq API로 네이버 SEO 최적화 블로그 글 생성."""
+    api_key = os.getenv("GROQ_API_KEY", "")
+    if not api_key:
+        return None
+    try:
+        from groq import Groq
+        client = Groq(api_key=api_key)
+        kw = [k.strip() for k in inp.keywords if k.strip()]
+        main_kw = kw[0] if kw else inp.topic
+        sub_kws = kw[1:] if len(kw) > 1 else []
+        sub_kws_str = ", ".join(sub_kws) if sub_kws else main_kw
+
+        prompt = f"""당신은 네이버 블로그 SEO 전문 작가입니다. 아래 조건으로 블로그 글을 작성하세요.
+
+[주제] {inp.topic}
+[메인 키워드] {main_kw}
+[서브 키워드] {sub_kws_str}
+[톤] {inp.tone}
+
+=== 네이버 상위노출 SEO 규칙 ===
+1. 제목: 메인 키워드를 앞에 배치, 25~35자, 숫자/궁금증 포함 (예: "멸치볶음 레시피 5가지 – 초보도 바삭하게 만드는 법")
+2. 첫 문단(리드): 메인 키워드 2회 이상 자연스럽게 포함, 3~4문장
+3. 소제목(##): 서브 키워드 포함, 6~8개 소제목
+4. 본문: 2000자 이상, 메인 키워드 10회 이상, 서브 키워드 각 3회 이상
+5. 재료/순서는 표(| 구분)로 정리
+6. FAQ 섹션: 실제 네이버 검색 질문 패턴으로 5개
+7. 마무리: 메인 키워드 + 핵심 요약 1문단
+8. 태그: 메인 키워드 + 서브 키워드 포함 10개
+
+응답 형식 (반드시 준수):
+TITLE: (제목)
+---
+(본문 - 마크다운 형식)"""
+
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=4096,
+            temperature=0.7,
+        )
+        text = resp.choices[0].message.content.strip()
+        if "TITLE:" in text and "---" in text:
+            parts = text.split("---", 1)
+            title = parts[0].replace("TITLE:", "").strip()
+            body = parts[1].strip()
+        else:
+            lines = text.split("\n")
+            title = lines[0].strip()
+            body = "\n".join(lines[1:]).strip()
+        return title, body
+    except Exception as e:
+        print(f"[Groq API 오류] {e}")
+        return None
+
+
 def generate_blog_post(inp: GenerateInput) -> tuple[str, str]:
     """
-    Returns (title, body). Claude API 우선, 없으면 템플릿 생성.
+    Returns (title, body). Groq → Claude → 템플릿 순으로 시도.
     """
+    # Groq API 시도 (우선)
+    result = _generate_blog_with_groq(inp)
+    if result:
+        title, body = result
+        kw = [k.strip() for k in inp.keywords if k.strip()]
+        if inp.blog_platform == "tistory":
+            return title, _tistory_block(title=title, body=body, keywords=kw)
+        return title, body
+
     # Claude API 시도
     result = _generate_blog_with_claude(inp)
     if result:

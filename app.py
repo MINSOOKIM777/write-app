@@ -29,7 +29,7 @@ st.set_page_config(page_title="블로그/쇼츠 자동 생성", layout="wide")
 st.title("블로그 글 작성 / 쇼츠 만들기")
 st.caption("입력 → 버튼 클릭으로 블로그 글(1500자+)과 쇼츠(45/60초) 대본을 자동 생성합니다.")
 
-main_tab, news_tab, bible_tab = st.tabs(["✍️ 블로그/쇼츠 작성", "📺 뉴스 쇼츠 자동 생성", "✝️ 성경 쇼츠"])
+main_tab, news_tab, bible_tab, blogger_tab = st.tabs(["✍️ 블로그/쇼츠 작성", "📺 뉴스 쇼츠 자동 생성", "✝️ 성경 쇼츠", "📝 블로거 포스팅"])
 
 # ───────────────────────────────────────────────────────────────
 # 탭 1: 기존 블로그/쇼츠 작성
@@ -413,3 +413,109 @@ with bible_tab:
                 st.video(str(video_path))
             except Exception as e:
                 st.error(f"영상 생성 실패: {e}")
+
+# ───────────────────────────────────────────────────────────────
+# 탭 4: 블로거 포스팅
+# ───────────────────────────────────────────────────────────────
+with blogger_tab:
+    st.subheader("📝 Google Blogger 자동 포스팅")
+    st.caption("블로그 글 자동 생성 후 Blogger에 바로 발행합니다.")
+
+    BLOGGER_ID = "7254148981721208318"
+
+    def _auto_fill_keywords(topic: str) -> dict:
+        """Groq으로 주제에 맞는 키워드/톤/라벨 자동 생성."""
+        import os
+        api_key = os.getenv("GROQ_API_KEY", "")
+        if not api_key:
+            return {}
+        try:
+            from groq import Groq
+            client = Groq(api_key=api_key)
+            resp = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": f"""블로그 주제: "{topic}"
+아래 항목을 JSON으로만 응답하세요 (다른 텍스트 없이):
+{{
+  "main_keyword": "메인 키워드 1개",
+  "sub_keywords": "서브키워드1, 서브키워드2, 서브키워드3, 서브키워드4",
+  "tone": "톤/분위기 한 문장",
+  "labels": "라벨1,라벨2,라벨3"
+}}"""}],
+                max_tokens=200,
+                temperature=0.3,
+            )
+            import json, re
+            text = resp.choices[0].message.content.strip()
+            m = re.search(r"\{.*\}", text, re.DOTALL)
+            if m:
+                return json.loads(m.group())
+        except Exception:
+            pass
+        return {}
+
+    for k, v in [("b_keywords_val",""), ("b_tone_val","친근하고 따라하기 쉽게"), ("b_labels_val","")]:
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+    b_topic = st.text_input("주제 입력", value="멸치볶음 레시피", key="b_topic")
+
+    auto_col, _ = st.columns([1, 3])
+    if auto_col.button("✨ 키워드 자동 완성", use_container_width=True):
+        with st.spinner("키워드 생성 중..."):
+            auto = _auto_fill_keywords(b_topic.strip())
+            if auto:
+                st.session_state.b_keywords_val = f"{auto.get('main_keyword','')}, {auto.get('sub_keywords','')}"
+                st.session_state.b_tone_val = auto.get("tone", "친근하고 따라하기 쉽게")
+                st.session_state.b_labels_val = auto.get("labels", "")
+                st.rerun()
+
+    b_col1, b_col2 = st.columns([1, 1])
+    with b_col1:
+        b_keywords = st.text_input("키워드(메인, 서브)", value=st.session_state.b_keywords_val, key="b_keywords")
+        b_tone = st.text_input("톤", value=st.session_state.b_tone_val, key="b_tone")
+    with b_col2:
+        b_labels = st.text_input("라벨/태그(쉼표 구분)", value=st.session_state.b_labels_val, key="b_labels")
+        b_industry = st.selectbox("업종", options=[("general","일반"),("medical","의료"),("insurance","보험/금융")], format_func=lambda x: x[1], key="b_industry")[0]
+
+    if "blogger_title" not in st.session_state:
+        st.session_state.blogger_title = ""
+        st.session_state.blogger_body = ""
+
+    gen_btn = st.button("📄 블로그 글 생성", use_container_width=True, type="primary")
+    if gen_btn:
+        with st.spinner("글 생성 중..."):
+            try:
+                b_inp = GenerateInput(
+                    industry=b_industry,
+                    blog_platform="tistory",
+                    topic=b_topic.strip(),
+                    keywords=[k.strip() for k in b_keywords.split(",") if k.strip()],
+                    tone=b_tone.strip(),
+                    platform="shorts",
+                    seconds=60,
+                )
+                title, body = generate_blog_post(b_inp)
+                st.session_state.blogger_title = title
+                st.session_state.blogger_body = body
+                st.success("생성 완료!")
+            except Exception as e:
+                st.error(f"생성 실패: {e}")
+
+    if st.session_state.blogger_title:
+        st.divider()
+        edit_title = st.text_input("제목 수정", value=st.session_state.blogger_title, key="edit_b_title")
+        edit_body = st.text_area("본문 수정", value=st.session_state.blogger_body, height=400, key="edit_b_body")
+
+        post_btn = st.button("🚀 Blogger에 발행", type="primary", use_container_width=True)
+        if post_btn:
+            with st.spinner("발행 중... (첫 실행 시 브라우저 로그인 필요)"):
+                try:
+                    from blogger_poster import post_to_blogger
+                    html_body = edit_body
+                    labels = [l.strip() for l in b_labels.split(",") if l.strip()]
+                    result = post_to_blogger(BLOGGER_ID, edit_title, html_body, labels, image_keyword=b_topic.strip())
+                    post_url = result.get("url", "")
+                    st.success(f"발행 완료! [{edit_title}]({post_url})")
+                except Exception as e:
+                    st.error(f"발행 실패: {e}")

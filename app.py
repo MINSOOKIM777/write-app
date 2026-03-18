@@ -526,8 +526,8 @@ with blogger_tab:
 
     if st.session_state.blogger_title:
         st.divider()
-        edit_title = st.text_input("제목 수정", value=st.session_state.blogger_title, key="edit_b_title")
-        edit_body = st.text_area("본문 수정", value=st.session_state.blogger_body, height=400, key="edit_b_body")
+        edit_title = st.text_input("제목 수정", key="edit_b_title")
+        edit_body = st.text_area("본문 수정", height=400, key="edit_b_body")
 
         post_btn = st.button("🚀 Blogger에 발행", type="primary", use_container_width=True)
         if post_btn:

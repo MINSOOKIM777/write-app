@@ -92,25 +92,58 @@ def _markdown_to_html(text: str) -> str:
     """기본 마크다운 → HTML 변환."""
     lines = text.split("\n")
     result = []
+    in_ol = False
+    in_ul = False
+
     for line in lines:
+        # 번호 리스트 (1. 또는 1))
+        if re.match(r"^\d+[\.\)] ", line):
+            if not in_ol:
+                result.append('<ol style="line-height:2;padding-left:20px;">')
+                in_ol = True
+            content = re.sub(r"^\d+[\.\)] ", "", line)
+            content = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", content)
+            result.append(f"<li>{content}</li>")
+            continue
+        else:
+            if in_ol:
+                result.append("</ol>")
+                in_ol = False
+
+        # 불릿 리스트
+        if line.startswith("- ") or line.startswith("* "):
+            if not in_ul:
+                result.append('<ul style="line-height:2;padding-left:20px;">')
+                in_ul = True
+            content = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line[2:])
+            result.append(f"<li>{content}</li>")
+            continue
+        else:
+            if in_ul:
+                result.append("</ul>")
+                in_ul = False
+
         # 제목
         if line.startswith("### "):
-            line = f"<h3>{line[4:]}</h3>"
+            line = f'<h3 style="margin-top:24px;">{line[4:]}</h3>'
         elif line.startswith("## "):
-            line = f"<h2>{line[3:]}</h2>"
+            line = f'<h2 style="margin-top:32px;border-bottom:2px solid #eee;padding-bottom:8px;">{line[3:]}</h2>'
         elif line.startswith("# "):
             line = f"<h1>{line[2:]}</h1>"
-        # 리스트
-        elif line.startswith("- ") or line.startswith("* "):
-            line = f"<li>{line[2:]}</li>"
-        elif re.match(r"^\d+\) ", line):
-            line = f"<li>{line[line.index(')')+2:]}</li>"
         # 굵게
         line = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line)
-        # 빈줄 → <br>
+        # 빈줄 → 문단 간격
         if line.strip() == "":
-            line = "<br>"
+            line = '<p style="margin:12px 0;"></p>'
+        elif not line.startswith("<"):
+            line = f'<p style="line-height:1.9;margin:8px 0;">{line}</p>'
         result.append(line)
+
+    if in_ol:
+        result.append("</ol>")
+    if in_ul:
+        result.append("</ul>")
+
     return "\n".join(result)
 
 

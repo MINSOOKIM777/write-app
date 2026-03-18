@@ -159,43 +159,73 @@ def _markdown_to_html(text: str) -> str:
 
 
 def _fetch_ai_images(keyword: str, count: int = 5) -> list[str]:
-    """Pollinations.ai로 AI 이미지 생성 URL 반환 (무료, API 키 불필요)."""
-    # 한국어 키워드를 영어로 번역
+    """Pixabay에서 음식 관련 이미지 검색."""
+    api_key = os.getenv("PIXABAY_API_KEY", "")
+    if not api_key:
+        try:
+            import streamlit as st
+            api_key = st.secrets.get("PIXABAY_API_KEY", "")
+        except Exception:
+            pass
+    if not api_key:
+        return []
+
+    # 한국어 → 영어 번역
+    en_keyword = keyword
     try:
         from groq import Groq as _Groq
         _key = os.getenv("GROQ_API_KEY", "")
+        if not _key:
+            try:
+                import streamlit as st
+                _key = st.secrets.get("GROQ_API_KEY", "")
+            except Exception:
+                pass
         if _key:
             c = _Groq(api_key=_key)
             r = c.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": f"Translate to English for food photo prompt (5-8 words, appetizing description): {keyword}"}],
-                max_tokens=30,
+                messages=[{"role": "user", "content": f"Translate this Korean dish name to English (1-3 words only, exact dish name, no explanation): {keyword}"}],
+                max_tokens=15,
             )
-            en_keyword = r.choices[0].message.content.strip().strip('"')
-        else:
-            en_keyword = keyword
+            en_keyword = r.choices[0].message.content.strip().strip('"').split("\n")[0]
     except Exception:
-        en_keyword = keyword
+        pass
 
-    urls = []
-    for i in range(count):
-        prompt = requests.utils.quote(f"{en_keyword}, food photography, delicious, professional, high quality, seed {i*7}")
-        urls.append(f"https://image.pollinations.ai/prompt/{prompt}?width=800&height=600&nologo=true")
-    return urls
+    try:
+        r = requests.get(
+            "https://pixabay.com/api/",
+            params={"key": api_key, "q": f"{en_keyword} food", "image_type": "photo", "per_page": count, "lang": "en", "category": "food"},
+            timeout=8,
+        )
+        hits = r.json().get("hits", [])
+        return [h["webformatURL"] for h in hits[:count]]
+    except Exception:
+        return []
 
 
 def _insert_images_into_html(body: str, image_urls: list[str]) -> str:
-    """h2 소제목 뒤에 이미지 삽입."""
+    """h2 소제목 뒤에 이미지 삽입. h2 부족하면 p 태그 뒤에도 삽입."""
     if not image_urls:
         return body
     img_tag = lambda url: f'<img src="{url}" style="width:100%;max-width:640px;margin:16px 0;border-radius:10px;display:block;" />'
-    # h2 태그 뒤에 순서대로 이미지 삽입
-    img_idx = 0
-    parts = re.split(r'(<h2[^>]*>.*?</h2>)', body)
+    parts = re.split(r'(<h2[^>]*>.*?</h2>|<p[^>]*>.*?</p>)', body, flags=re.DOTALL)
     result = []
-    for part in parts:
+    img_idx = 0
+    h2_positions = [i for i, p in enumerate(parts) if p.startswith('<h2')]
+    # h2 뒤에 먼저 배치
+    insert_at = set(h2_positions[:len(image_urls)])
+    # h2가 부족하면 p 태그 위치에 균등 배분
+    if len(insert_at) < len(image_urls):
+        p_positions = [i for i, p in enumerate(parts) if p.startswith('<p')]
+        step = max(1, len(p_positions) // (len(image_urls) - len(insert_at) + 1))
+        for j in range(0, len(p_positions), step):
+            if len(insert_at) >= len(image_urls):
+                break
+            insert_at.add(p_positions[j])
+    for i, part in enumerate(parts):
         result.append(part)
-        if part.startswith('<h2') and img_idx < len(image_urls):
+        if i in insert_at and img_idx < len(image_urls):
             result.append(img_tag(image_urls[img_idx]))
             img_idx += 1
     return "".join(result)
@@ -213,6 +243,7 @@ def post_to_blogger(blog_id: str, title: str, content: str, labels: list[str] | 
     # 이미지 삽입
     if image_keyword:
         image_urls = _fetch_ai_images(image_keyword, count=5)
+
         content = _insert_images_into_html(content, image_urls)
 
     body_data: dict = {

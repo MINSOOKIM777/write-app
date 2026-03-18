@@ -1,0 +1,10 @@
+.env
+.env.*
+.venv/
+__pycache__/
+*.pyc
+outputs/
+.local_youtube/
+*.mp4
+*.mp3
+token_*.json

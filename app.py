@@ -518,6 +518,8 @@ with blogger_tab:
                 title, body = generate_blog_post(b_inp)
                 st.session_state.blogger_title = title
                 st.session_state.blogger_body = body
+                st.session_state.edit_b_title = title
+                st.session_state.edit_b_body = body
                 st.success("생성 완료!")
             except Exception as e:
                 st.error(f"생성 실패: {e}")

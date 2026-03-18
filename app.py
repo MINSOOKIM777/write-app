@@ -459,8 +459,8 @@ with blogger_tab:
             m = re.search(r"\{.*\}", text, re.DOTALL)
             if m:
                 return json.loads(m.group())
-        except Exception:
-            pass
+        except Exception as _e:
+            return {"error": str(_e)}
         return {}
 
     for k, v in [("b_keywords_val",""), ("b_tone_val","친근하고 따라하기 쉽게"), ("b_labels_val","")]:
@@ -473,11 +473,15 @@ with blogger_tab:
     if auto_col.button("✨ 키워드 자동 완성", use_container_width=True):
         with st.spinner("키워드 생성 중..."):
             auto = _auto_fill_keywords(b_topic.strip())
-            if auto:
+            if "error" in auto:
+                st.error(f"오류: {auto['error']}")
+            elif auto:
                 st.session_state.b_keywords_val = f"{auto.get('main_keyword','')}, {auto.get('sub_keywords','')}"
                 st.session_state.b_tone_val = auto.get("tone", "친근하고 따라하기 쉽게")
                 st.session_state.b_labels_val = auto.get("labels", "")
                 st.rerun()
+            else:
+                st.error("GROQ_API_KEY가 없거나 응답 실패")
 
     b_col1, b_col2 = st.columns([1, 1])
     with b_col1:

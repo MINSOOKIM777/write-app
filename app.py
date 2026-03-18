@@ -468,9 +468,12 @@ with blogger_tab:
             return {"error": str(_e)}
         return {}
 
-    for k, v in [("b_keywords_val",""), ("b_tone_val","친근하고 따라하기 쉽게"), ("b_labels_val","")]:
-        if k not in st.session_state:
-            st.session_state[k] = v
+    if "b_keywords" not in st.session_state:
+        st.session_state.b_keywords = ""
+    if "b_tone" not in st.session_state:
+        st.session_state.b_tone = "친근하고 따라하기 쉽게"
+    if "b_labels" not in st.session_state:
+        st.session_state.b_labels = ""
 
     b_topic = st.text_input("주제 입력", value="멸치볶음 레시피", key="b_topic")
 
@@ -481,19 +484,18 @@ with blogger_tab:
             if "error" in auto:
                 st.error(f"오류: {auto['error']}")
             elif auto:
-                st.session_state.b_keywords_val = f"{auto.get('main_keyword','')}, {auto.get('sub_keywords','')}"
-                st.session_state.b_tone_val = auto.get("tone", "친근하고 따라하기 쉽게")
-                st.session_state.b_labels_val = auto.get("labels", "")
-                st.rerun()
+                st.session_state.b_keywords = f"{auto.get('main_keyword','')}, {auto.get('sub_keywords','')}"
+                st.session_state.b_tone = auto.get("tone", "친근하고 따라하기 쉽게")
+                st.session_state.b_labels = auto.get("labels", "")
             else:
                 st.error("GROQ_API_KEY가 없거나 응답 실패")
 
     b_col1, b_col2 = st.columns([1, 1])
     with b_col1:
-        b_keywords = st.text_input("키워드(메인, 서브)", value=st.session_state.b_keywords_val, key="b_keywords")
-        b_tone = st.text_input("톤", value=st.session_state.b_tone_val, key="b_tone")
+        b_keywords = st.text_input("키워드(메인, 서브)", key="b_keywords")
+        b_tone = st.text_input("톤", key="b_tone")
     with b_col2:
-        b_labels = st.text_input("라벨/태그(쉼표 구분)", value=st.session_state.b_labels_val, key="b_labels")
+        b_labels = st.text_input("라벨/태그(쉼표 구분)", key="b_labels")
         b_industry = st.selectbox("업종", options=[("general","일반"),("medical","의료"),("insurance","보험/금융")], format_func=lambda x: x[1], key="b_industry")[0]
 
     if "blogger_title" not in st.session_state:

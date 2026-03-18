@@ -16,16 +16,40 @@ SECRET_PATH = Path(__file__).resolve().parent / "client_secret.json"
 
 
 def _get_credentials() -> Credentials:
+    import streamlit as st
+
+    # Streamlit Cloud: Secrets에서 읽기
+    try:
+        token_str = st.secrets.get("BLOGGER_TOKEN", "")
+        secret_str = st.secrets.get("BLOGGER_CLIENT_SECRET", "")
+    except Exception:
+        token_str = ""
+        secret_str = ""
+
+    # 로컬: 파일에서 읽기
+    if not token_str and TOKEN_PATH.exists():
+        token_str = TOKEN_PATH.read_text(encoding="utf-8")
+    if not secret_str and SECRET_PATH.exists():
+        secret_str = SECRET_PATH.read_text(encoding="utf-8")
+
     creds = None
-    if TOKEN_PATH.exists():
-        creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
+    if token_str:
+        creds = Credentials.from_authorized_user_info(json.loads(token_str), SCOPES)
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
+            TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(str(SECRET_PATH), SCOPES)
+            if not secret_str:
+                raise RuntimeError("client_secret.json 또는 BLOGGER_CLIENT_SECRET Secrets가 필요합니다.")
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+                f.write(secret_str)
+                tmp_path = f.name
+            flow = InstalledAppFlow.from_client_secrets_file(tmp_path, SCOPES)
             creds = flow.run_local_server(port=0)
-        TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
+            TOKEN_PATH.write_text(creds.to_json(), encoding="utf-8")
     return creds
 
 

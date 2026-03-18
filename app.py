@@ -502,8 +502,8 @@ with blogger_tab:
         st.session_state.blogger_title = ""
         st.session_state.blogger_body = ""
 
-    gen_btn = st.button("📄 블로그 글 생성", use_container_width=True, type="primary")
-    if gen_btn:
+    gen_post_btn = st.button("🚀 글 생성 + Blogger 발행", use_container_width=True, type="primary")
+    if gen_post_btn:
         with st.spinner("글 생성 중..."):
             try:
                 b_inp = GenerateInput(
@@ -516,28 +516,24 @@ with blogger_tab:
                     seconds=60,
                 )
                 title, body = generate_blog_post(b_inp)
-                st.session_state.blogger_title = title
-                st.session_state.blogger_body = body
-                st.session_state.edit_b_title = title
-                st.session_state.edit_b_body = body
-                st.success("생성 완료!")
             except Exception as e:
-                st.error(f"생성 실패: {e}")
+                st.error(f"글 생성 실패: {e}")
+                title, body = None, None
 
-    if st.session_state.blogger_title:
-        st.divider()
-        edit_title = st.text_input("제목 수정", key="edit_b_title")
-        edit_body = st.text_area("본문 수정", height=400, key="edit_b_body")
-
-        post_btn = st.button("🚀 Blogger에 발행", type="primary", use_container_width=True)
-        if post_btn:
-            with st.spinner("발행 중... (첫 실행 시 브라우저 로그인 필요)"):
+        if title:
+            with st.spinner("이미지 생성 및 발행 중... (30~60초 소요)"):
                 try:
                     from blogger_poster import post_to_blogger
-                    html_body = edit_body
                     labels = [l.strip() for l in b_labels.split(",") if l.strip()]
-                    result = post_to_blogger(BLOGGER_ID, edit_title, html_body, labels, image_keyword=b_topic.strip())
+                    result = post_to_blogger(BLOGGER_ID, title, body, labels, image_keyword=b_topic.strip())
                     post_url = result.get("url", "")
-                    st.success(f"발행 완료! [{edit_title}]({post_url})")
+                    st.success(f"발행 완료!")
+                    st.markdown(f"[{title}]({post_url})")
+                    st.session_state.edit_b_title = title
+                    st.session_state.edit_b_body = body
                 except Exception as e:
                     st.error(f"발행 실패: {e}")
+
+    if st.session_state.get("edit_b_title"):
+        st.divider()
+        st.text_input("마지막 발행 제목", key="edit_b_title", disabled=True)

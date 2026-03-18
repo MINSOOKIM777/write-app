@@ -94,6 +94,7 @@ def _markdown_to_html(text: str) -> str:
     result = []
     in_ol = False
     in_ul = False
+    ol_counter = 0
 
     for line in lines:
         # 번호 리스트 (1. 또는 1))
@@ -101,14 +102,22 @@ def _markdown_to_html(text: str) -> str:
             if not in_ol:
                 result.append('<ol style="line-height:2;padding-left:20px;">')
                 in_ol = True
+                ol_counter = 0
+            ol_counter += 1
             content = re.sub(r"^\d+[\.\)] ", "", line)
             content = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", content)
-            result.append(f"<li>{content}</li>")
+            result.append(f'<li value="{ol_counter}">{content}</li>')
+            continue
+        # 💡 팁 줄은 ol 안에서 들여쓰기로 표시 (ol 닫지 않음)
+        elif in_ol and (line.startswith("💡") or line.startswith("- ")):
+            content = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", line)
+            result.append(f'<li style="list-style:none;color:#666;font-size:0.9em;margin-left:-10px;">{content}</li>')
             continue
         else:
-            if in_ol:
+            if in_ol and line.strip() != "":
                 result.append("</ol>")
                 in_ol = False
+                ol_counter = 0
 
         # 불릿 리스트
         if line.startswith("- ") or line.startswith("* "):
@@ -149,46 +158,30 @@ def _markdown_to_html(text: str) -> str:
     return "\n".join(result)
 
 
-def _translate_to_english(keyword: str) -> str:
-    """Groq으로 키워드 영어 번역."""
+def _fetch_ai_images(keyword: str, count: int = 5) -> list[str]:
+    """Pollinations.ai로 AI 이미지 생성 URL 반환 (무료, API 키 불필요)."""
+    # 한국어 키워드를 영어로 번역
     try:
         from groq import Groq as _Groq
         _key = os.getenv("GROQ_API_KEY", "")
-        if not _key:
-            return keyword
-        c = _Groq(api_key=_key)
-        r = c.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": f"Translate this Korean food/recipe name to English for stock photo search. Return ONLY 2-3 English words, nothing else: {keyword}"}],
-            max_tokens=20,
-        )
-        return r.choices[0].message.content.strip().strip('"')
+        if _key:
+            c = _Groq(api_key=_key)
+            r = c.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": f"Translate to English for food photo prompt (5-8 words, appetizing description): {keyword}"}],
+                max_tokens=30,
+            )
+            en_keyword = r.choices[0].message.content.strip().strip('"')
+        else:
+            en_keyword = keyword
     except Exception:
-        return keyword
+        en_keyword = keyword
 
-
-def _fetch_pixabay_images(keyword: str, count: int = 5) -> list[str]:
-    """Pixabay에서 키워드 관련 이미지 URL 반환."""
-    api_key = os.getenv("PIXABAY_API_KEY", "")
-    if not api_key:
-        try:
-            import streamlit as st
-            api_key = st.secrets.get("PIXABAY_API_KEY", "")
-        except Exception:
-            pass
-    if not api_key:
-        return []
-    try:
-        en_keyword = _translate_to_english(keyword)
-        r = requests.get(
-            "https://pixabay.com/api/",
-            params={"key": api_key, "q": en_keyword, "image_type": "photo", "per_page": count, "lang": "en"},
-            timeout=8,
-        )
-        hits = r.json().get("hits", [])
-        return [h["webformatURL"] for h in hits[:count]]
-    except Exception:
-        return []
+    urls = []
+    for i in range(count):
+        prompt = requests.utils.quote(f"{en_keyword}, food photography, delicious, professional, high quality, seed {i*7}")
+        urls.append(f"https://image.pollinations.ai/prompt/{prompt}?width=800&height=600&nologo=true")
+    return urls
 
 
 def _insert_images_into_html(body: str, image_urls: list[str]) -> str:
@@ -219,7 +212,7 @@ def post_to_blogger(blog_id: str, title: str, content: str, labels: list[str] | 
 
     # 이미지 삽입
     if image_keyword:
-        image_urls = _fetch_pixabay_images(image_keyword, count=5)
+        image_urls = _fetch_ai_images(image_keyword, count=5)
         content = _insert_images_into_html(content, image_urls)
 
     body_data: dict = {

@@ -437,7 +437,12 @@ with blogger_tab:
         import os
         api_key = os.getenv("GROQ_API_KEY", "")
         if not api_key:
-            return {}
+            try:
+                api_key = st.secrets.get("GROQ_API_KEY", "")
+            except Exception:
+                pass
+        if not api_key:
+            return {"error": "GROQ_API_KEY 없음"}
         try:
             from groq import Groq
             client = Groq(api_key=api_key)

@@ -135,6 +135,8 @@ def _markdown_to_html(text: str) -> str:
         # 빈줄 → 문단 간격
         if line.strip() == "":
             line = '<p style="margin:12px 0;"></p>'
+        elif line.strip().startswith("|"):
+            pass  # 표는 건드리지 않음
         elif not line.startswith("<"):
             line = f'<p style="line-height:1.9;margin:8px 0;">{line}</p>'
         result.append(line)
@@ -157,7 +159,7 @@ def _translate_to_english(keyword: str) -> str:
         c = _Groq(api_key=_key)
         r = c.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": f"Translate to English for image search (2-3 words only, no explanation): {keyword}"}],
+            messages=[{"role": "user", "content": f"Translate this Korean food/recipe name to English for stock photo search. Return ONLY 2-3 English words, nothing else: {keyword}"}],
             max_tokens=20,
         )
         return r.choices[0].message.content.strip().strip('"')
@@ -190,20 +192,20 @@ def _fetch_pixabay_images(keyword: str, count: int = 5) -> list[str]:
 
 
 def _insert_images_into_html(body: str, image_urls: list[str]) -> str:
-    """본문을 3등분해서 이미지 삽입."""
+    """h2 소제목 뒤에 이미지 삽입."""
     if not image_urls:
         return body
-    lines = body.split("<br>")
-    chunk = max(1, len(lines) // (len(image_urls) + 1))
-    result = []
+    img_tag = lambda url: f'<img src="{url}" style="width:100%;max-width:640px;margin:16px 0;border-radius:10px;display:block;" />'
+    # h2 태그 뒤에 순서대로 이미지 삽입
     img_idx = 0
-    for i, line in enumerate(lines):
-        result.append(line)
-        if img_idx < len(image_urls) and (i + 1) % chunk == 0:
-            img_tag = f'<br><img src="{image_urls[img_idx]}" style="width:100%;max-width:600px;margin:16px 0;border-radius:8px;" /><br>'
-            result.append(img_tag)
+    parts = re.split(r'(<h2[^>]*>.*?</h2>)', body)
+    result = []
+    for part in parts:
+        result.append(part)
+        if part.startswith('<h2') and img_idx < len(image_urls):
+            result.append(img_tag(image_urls[img_idx]))
             img_idx += 1
-    return "<br>".join(result)
+    return "".join(result)
 
 
 def post_to_blogger(blog_id: str, title: str, content: str, labels: list[str] | None = None, image_keyword: str = "") -> dict:
@@ -211,9 +213,9 @@ def post_to_blogger(blog_id: str, title: str, content: str, labels: list[str] | 
     creds = _get_credentials()
     service = build("blogger", "v3", credentials=creds)
 
-    # 마크다운 → HTML 변환
-    content = _markdown_to_html(content)
+    # 표 먼저 변환 → 나머지 마크다운 변환
     content = _markdown_table_to_html(content)
+    content = _markdown_to_html(content)
 
     # 이미지 삽입
     if image_keyword:

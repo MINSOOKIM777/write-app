@@ -158,48 +158,74 @@ def _markdown_to_html(text: str) -> str:
     return "\n".join(result)
 
 
-def _fetch_ai_images(keyword: str, count: int = 5) -> list[str]:
-    """Pixabay에서 음식 관련 이미지 검색."""
-    api_key = os.getenv("PIXABAY_API_KEY", "")
-    if not api_key:
+def _get_secret(key: str) -> str:
+    val = os.getenv(key, "")
+    if not val:
         try:
             import streamlit as st
-            api_key = st.secrets.get("PIXABAY_API_KEY", "")
+            val = st.secrets.get(key, "")
         except Exception:
             pass
-    if not api_key:
-        return []
+    return val
 
-    # 한국어 → 영어 번역
-    en_keyword = keyword
+
+def _translate_keyword(keyword: str) -> str:
+    """한국어 키워드 → 영어 번역."""
     try:
         from groq import Groq as _Groq
-        _key = os.getenv("GROQ_API_KEY", "")
-        if not _key:
-            try:
-                import streamlit as st
-                _key = st.secrets.get("GROQ_API_KEY", "")
-            except Exception:
-                pass
+        _key = _get_secret("GROQ_API_KEY")
         if _key:
             c = _Groq(api_key=_key)
             r = c.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": f"Translate this Korean dish name to English (1-3 words only, exact dish name, no explanation): {keyword}"}],
+                messages=[{"role": "user", "content": f"Translate this Korean dish name to English (1-3 words only, exact dish name): {keyword}"}],
                 max_tokens=15,
             )
-            en_keyword = r.choices[0].message.content.strip().strip('"').split("\n")[0]
+            return r.choices[0].message.content.strip().strip('"').split("\n")[0]
     except Exception:
         pass
+    return keyword
 
+
+def _fetch_ai_images(keyword: str, count: int = 5) -> list[str]:
+    """Google Custom Search API로 음식 이미지 검색."""
+    api_key = _get_secret("GOOGLE_SEARCH_API_KEY")
+    cse_id = _get_secret("GOOGLE_CSE_ID")
+
+    if not api_key or not cse_id:
+        # fallback: Pixabay
+        px_key = _get_secret("PIXABAY_API_KEY")
+        if px_key:
+            en_kw = _translate_keyword(keyword)
+            try:
+                r = requests.get(
+                    "https://pixabay.com/api/",
+                    params={"key": px_key, "q": f"{en_kw} food", "image_type": "photo", "per_page": count, "category": "food"},
+                    timeout=8,
+                )
+                hits = r.json().get("hits", [])
+                return [h["webformatURL"] for h in hits[:count]]
+            except Exception:
+                pass
+        return []
+
+    en_keyword = _translate_keyword(keyword)
     try:
         r = requests.get(
-            "https://pixabay.com/api/",
-            params={"key": api_key, "q": f"{en_keyword} food", "image_type": "photo", "per_page": count, "lang": "en", "category": "food"},
-            timeout=8,
+            "https://www.googleapis.com/customsearch/v1",
+            params={
+                "key": api_key,
+                "cx": cse_id,
+                "q": f"{en_keyword} food recipe",
+                "searchType": "image",
+                "imgType": "photo",
+                "num": count,
+                "safe": "active",
+            },
+            timeout=10,
         )
-        hits = r.json().get("hits", [])
-        return [h["webformatURL"] for h in hits[:count]]
+        items = r.json().get("items", [])
+        return [item["link"] for item in items[:count]]
     except Exception:
         return []
 

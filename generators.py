@@ -257,9 +257,24 @@ TITLE: (제목)
 ---
 (본문 - 마크다운 형식, 문단 사이 빈 줄 포함)"""
 
+        system_msg = f"""당신은 네이버 SEO 전문 블로그 작가입니다.
+
+[제목 규칙 - 절대 준수]
+- 제목은 반드시 메인 키워드 "{main_kw}"로 시작
+- 허용 형식: "{main_kw} 만드는 법 – [핵심포인트]" 또는 "{main_kw} 레시피 [구체적팁]"
+- 금지 표현 (이 중 하나라도 포함되면 오답): "30대 아빠", "아빠가", "N번", "번 실패", "실패 후", "충격", "반전", "비밀", "공개", "드디어", "마침내"
+- 제목에 경험담/스토리 요소 절대 넣지 말 것
+- 올바른 예: "{main_kw} 만드는 법 – 간장 비율과 불 조절 완벽 정리"
+- 잘못된 예: "30대 아빠가 10번 실패 후 완성한 {main_kw}"
+
+본문 스타일: 육아하는 30대 남편의 경험담 (본문에만 적용, 제목에는 절대 사용 금지)"""
+
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": prompt},
+            ],
             max_tokens=8192,
             temperature=0.7,
         )

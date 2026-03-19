@@ -527,7 +527,10 @@ with blogger_tab:
                     labels = [l.strip() for l in b_labels.split(",") if l.strip()]
 
                     # 이미지 미리 fetch해서 상태 표시
-                    kw = b_topic.strip()
+                    import re as _re
+                    kw = _re.sub(r'(레시피|만드는\s*법|만들기|요리법|요리).*', '', b_topic.strip()).strip()
+                    if not kw:
+                        kw = b_topic.strip()
                     px_key = os.getenv("PIXABAY_API_KEY", "")
                     if not px_key:
                         st.warning("⚠️ PIXABAY_API_KEY가 없어서 이미지 없이 발행됩니다. Streamlit Secrets에 추가해주세요.")
@@ -540,7 +543,7 @@ with blogger_tab:
                         else:
                             st.warning("⚠️ Pixabay 이미지를 찾지 못했습니다. 이미지 없이 발행됩니다.")
 
-                    result = post_to_blogger(BLOGGER_ID, title, body, labels, image_keyword=kw)
+                    result = post_to_blogger(BLOGGER_ID, title, body, labels, image_keyword=kw if kw else b_topic.strip())
                     post_url = result.get("url", "")
                     st.success(f"발행 완료!")
                     st.markdown(f"[{title}]({post_url})")

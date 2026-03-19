@@ -193,6 +193,39 @@ TITLE: (제목)
         return None
 
 
+def _analyze_naver_top_posts(keyword: str) -> str:
+    """네이버 블로그 상위 10개 글 제목/내용 분석."""
+    import requests, re as _re
+    client_id = os.getenv("NAVER_CLIENT_ID", "")
+    client_secret = os.getenv("NAVER_CLIENT_SECRET", "")
+    if not client_id or not client_secret:
+        return ""
+    try:
+        r = requests.get(
+            "https://openapi.naver.com/v1/search/blog.json",
+            headers={"X-Naver-Client-Id": client_id, "X-Naver-Client-Secret": client_secret},
+            params={"query": keyword, "display": 10, "sort": "sim"},
+            timeout=6,
+        )
+        items = r.json().get("items", [])
+        if not items:
+            return ""
+        strip = lambda s: _re.sub(r"<[^>]+>", "", s)
+        titles = [strip(item["title"]) for item in items]
+        descs = [strip(item["description"]) for item in items]
+        result = "=== 네이버 상위노출 블로그 분석 (참고용) ===\n"
+        result += "상위 10개 글 제목:\n"
+        for i, t in enumerate(titles, 1):
+            result += f"{i}. {t}\n"
+        result += "\n상위 글 공통 키워드/내용 (발췌):\n"
+        for d in descs[:5]:
+            result += f"- {d[:120]}\n"
+        result += "\n위 분석을 바탕으로: 제목 패턴, 자주 나오는 소제목 주제, 독자가 궁금해하는 포인트를 파악하여 글을 작성하세요.\n"
+        return result
+    except Exception:
+        return ""
+
+
 def _generate_blog_with_groq(inp: GenerateInput) -> tuple[str, str] | None:
     """Groq API로 네이버 SEO 최적화 블로그 글 생성."""
     api_key = os.getenv("GROQ_API_KEY", "")
@@ -206,7 +239,10 @@ def _generate_blog_with_groq(inp: GenerateInput) -> tuple[str, str] | None:
         sub_kws = kw[1:] if len(kw) > 1 else []
         sub_kws_str = ", ".join(sub_kws) if sub_kws else main_kw
 
-        prompt = f"""당신은 육아하는 30대 남편입니다. 아내와 아이를 위해 직접 요리를 배우고 실패도 하면서 터득한 경험을 네이버 블로그에 솔직하게 적는 스타일로 글을 씁니다.
+        naver_analysis = _analyze_naver_top_posts(main_kw)
+
+        prompt = f"""{naver_analysis}
+당신은 육아하는 30대 남편입니다. 아내와 아이를 위해 직접 요리를 배우고 실패도 하면서 터득한 경험을 네이버 블로그에 솔직하게 적는 스타일로 글을 씁니다.
 
 글쓰기 스타일:
 - "오늘 처음 해봤는데...", "솔직히 처음엔 망했어요 ㅋㅋ", "아내가 맛있다고 해서 뿌듯했습니다" 같은 생생한 경험담 포함

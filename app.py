@@ -9,7 +9,7 @@ load_dotenv()
 
 # Streamlit Cloud secrets → os.environ 동기화
 import os
-for _k in ["GEMINI_API_KEY", "GROQ_API_KEY", "ANTHROPIC_API_KEY", "PIXABAY_API_KEY", "ELEVENLABS_API_KEY"]:
+for _k in ["GEMINI_API_KEY", "GROQ_API_KEY", "ANTHROPIC_API_KEY", "PIXABAY_API_KEY", "ELEVENLABS_API_KEY", "NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET"]:
     try:
         if _k in st.secrets:
             os.environ[_k] = st.secrets[_k]

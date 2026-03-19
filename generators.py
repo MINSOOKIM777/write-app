@@ -23,6 +23,7 @@ class GenerateInput:
     platform: Literal["shorts", "reels", "tiktok"]
     seconds: int = 45
     blog_platform: BlogPlatform = "tistory"
+    extra_context: str = ""  # 설계안 등 추가 문서 내용
 
 
 def _now_stamp() -> str:
@@ -252,12 +253,13 @@ def _generate_blog_with_groq(inp: GenerateInput) -> tuple[str, str] | None:
 - AI가 쓴 느낌 절대 없게, 사람이 직접 경험하고 쓴 느낌
 - 중간중간 "(사진: ~~)" 같은 메모 스타일 없이 순수 텍스트로
 
-아래 조건으로 요리 레시피 블로그 글을 작성하세요.
+아래 조건으로 블로그 글을 작성하세요.
 
 [주제] {inp.topic}
 [메인 키워드] {main_kw}
 [서브 키워드] {sub_kws_str}
 [톤] {inp.tone}
+{f"[첨부 문서 - 반드시 이 내용 기반으로 작성]\\n{inp.extra_context}\\n" if inp.extra_context else ""}
 
 === 네이버 상위노출 SEO 규칙 ===
 1. 제목 (매우 중요):

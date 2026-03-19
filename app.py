@@ -31,6 +31,25 @@ from bible_verses import get_daily_verse
 
 
 BASE_DIR = Path(__file__).resolve().parent
+
+
+def _extract_file_text(uploaded_file) -> str:
+    """업로드된 파일에서 텍스트 추출 (PDF/TXT)."""
+    try:
+        if uploaded_file.name.endswith(".txt"):
+            return uploaded_file.read().decode("utf-8", errors="ignore")
+        elif uploaded_file.name.endswith(".pdf"):
+            try:
+                import pdfplumber
+                with pdfplumber.open(uploaded_file) as pdf:
+                    return "\n".join(p.extract_text() or "" for p in pdf.pages)[:6000]
+            except ImportError:
+                import PyPDF2
+                reader = PyPDF2.PdfReader(uploaded_file)
+                return "\n".join(p.extract_text() or "" for p in reader.pages)[:6000]
+    except Exception as e:
+        st.error(f"파일 읽기 실패: {e}")
+    return ""
 YOUTUBE_DIR = BASE_DIR / ".local_youtube"
 
 
@@ -115,8 +134,8 @@ with main_tab:
     left, right = st.columns([1, 1])
 
     with left:
-        topic = st.text_input("주제", value="멸치볶음 레시피")
-        keywords_raw = st.text_input("핵심 키워드(쉼표로 구분)", value="멸치볶음, 멸치볶음 레시피, 밑반찬")
+        topic = st.text_input("주제", value="")
+        keywords_raw = st.text_input("핵심 키워드(쉼표로 구분)", value="")
         tone = st.text_input("톤/분위기", value="친근하고 따라 하기 쉽게")
 
     with right:
@@ -124,8 +143,17 @@ with main_tab:
         st.markdown(
             "- **네이버**: 생성된 TXT를 메모장(TextEdit)에서 열어 복사→붙여넣기 권장\n"
             "- **티스토리**: 목차/태그/내부링크 섹션이 자동 포함됩니다\n"
-            "- **사진**: 본문에 `[사진1]~[사진5]` 슬롯이 자동 들어갑니다\n"
         )
+
+    # 보험 업종일 때 설계안 파일 업로드
+    extra_context = ""
+    if industry == "insurance":
+        st.markdown("#### 📄 설계안 파일 업로드 (선택)")
+        doc_file = st.file_uploader("설계안 PDF 또는 TXT 업로드", type=["pdf", "txt"], key="main_doc")
+        if doc_file:
+            extra_context = _extract_file_text(doc_file)
+            if extra_context:
+                st.success(f"✅ 파일 읽기 완료 ({len(extra_context)}자)")
 
     inp = GenerateInput(
         industry=industry,
@@ -135,6 +163,7 @@ with main_tab:
         tone=tone.strip(),
         platform=platform,
         seconds=seconds,
+        extra_context=extra_context,
     )
 
     st.divider()
@@ -499,6 +528,16 @@ with blogger_tab:
         b_labels = st.text_input("라벨/태그(쉼표 구분)", key="b_labels")
         b_industry = st.selectbox("업종", options=[("general","일반"),("medical","의료"),("insurance","보험/금융")], format_func=lambda x: x[1], key="b_industry")[0]
 
+    # 보험 업종일 때 설계안 업로드
+    b_extra_context = ""
+    if b_industry == "insurance":
+        st.markdown("#### 📄 설계안 파일 업로드 (선택)")
+        b_doc_file = st.file_uploader("설계안 PDF 또는 TXT 업로드", type=["pdf", "txt"], key="b_doc")
+        if b_doc_file:
+            b_extra_context = _extract_file_text(b_doc_file)
+            if b_extra_context:
+                st.success(f"✅ 파일 읽기 완료 ({len(b_extra_context)}자)")
+
     if "blogger_title" not in st.session_state:
         st.session_state.blogger_title = ""
         st.session_state.blogger_body = ""
@@ -515,6 +554,7 @@ with blogger_tab:
                     tone=b_tone.strip(),
                     platform="shorts",
                     seconds=60,
+                    extra_context=b_extra_context,
                 )
                 title, body = generate_blog_post(b_inp)
             except Exception as e:

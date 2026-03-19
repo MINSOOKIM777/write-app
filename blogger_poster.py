@@ -53,30 +53,45 @@ def _get_credentials() -> Credentials:
     return creds
 
 
+def _is_table_separator(line: str) -> bool:
+    s = line.strip()
+    return bool(s) and all(c in "|-: " for c in s) and "-" in s and "|" in s
+
+
 def _markdown_table_to_html(text: str) -> str:
-    """마크다운 표를 HTML 표로 변환."""
+    """마크다운 표를 HTML 표로 변환. 구분선 없는 표도 처리."""
     lines = text.split("\n")
     result = []
     i = 0
     while i < len(lines):
         line = lines[i]
-        if "|" in line and i + 1 < len(lines) and re.match(r"^\|[-| :]+\|", lines[i + 1].strip()):
-            # 표 시작
+        # 표 시작 감지: 줄이 |로 시작
+        if line.strip().startswith("|"):
+            # 연속된 | 줄 수집
+            table_lines = []
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                table_lines.append(lines[i])
+                i += 1
+
+            # 구분선 제거
+            rows = [l for l in table_lines if not _is_table_separator(l)]
+            if not rows:
+                result.extend(table_lines)
+                continue
+
             html = '<table style="width:100%;border-collapse:collapse;margin:16px 0;">'
-            # 헤더
-            headers = [h.strip() for h in line.strip().strip("|").split("|")]
+            # 첫 줄 = 헤더
+            headers = [h.strip() for h in rows[0].strip().strip("|").split("|") if h.strip()]
             html += "<thead><tr>"
             for h in headers:
-                html += f'<th style="border:1px solid #ddd;padding:8px;background:#f5f5f5;">{h}</th>'
+                html += f'<th style="border:1px solid #ddd;padding:8px;background:#f5f5f5;text-align:left;">{h}</th>'
             html += "</tr></thead><tbody>"
-            i += 2  # 헤더 + 구분선 넘기기
-            while i < len(lines) and "|" in lines[i]:
-                cells = [c.strip() for c in lines[i].strip().strip("|").split("|")]
+            for row in rows[1:]:
+                cells = [c.strip() for c in row.strip().strip("|").split("|")]
                 html += "<tr>"
                 for c in cells:
                     html += f'<td style="border:1px solid #ddd;padding:8px;">{c}</td>'
                 html += "</tr>"
-                i += 1
             html += "</tbody></table>"
             result.append(html)
         else:

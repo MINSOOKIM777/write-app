@@ -475,10 +475,11 @@ with blogger_tab:
     if "b_labels" not in st.session_state:
         st.session_state.b_labels = ""
 
-    b_topic = st.text_input("주제 입력", value="멸치볶음 레시피", key="b_topic")
+    with st.form(key="topic_form", clear_on_submit=False):
+        b_topic = st.text_input("주제 입력 (엔터 또는 버튼으로 자동완성)", value="", key="b_topic")
+        auto_submit = st.form_submit_button("✨ 키워드 자동 완성", use_container_width=True)
 
-    auto_col, _ = st.columns([1, 3])
-    if auto_col.button("✨ 키워드 자동 완성", use_container_width=True):
+    if auto_submit and b_topic.strip():
         with st.spinner("키워드 생성 중..."):
             auto = _auto_fill_keywords(b_topic.strip())
             if "error" in auto:

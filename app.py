@@ -521,11 +521,26 @@ with blogger_tab:
                 title, body = None, None
 
         if title:
-            with st.spinner("이미지 생성 및 발행 중... (30~60초 소요)"):
+            with st.spinner("이미지 검색 및 발행 중... (30~60초 소요)"):
                 try:
-                    from blogger_poster import post_to_blogger
+                    from blogger_poster import post_to_blogger, _fetch_ai_images, _translate_keyword
                     labels = [l.strip() for l in b_labels.split(",") if l.strip()]
-                    result = post_to_blogger(BLOGGER_ID, title, body, labels, image_keyword=b_topic.strip())
+
+                    # 이미지 미리 fetch해서 상태 표시
+                    kw = b_topic.strip()
+                    px_key = os.getenv("PIXABAY_API_KEY", "")
+                    if not px_key:
+                        st.warning("⚠️ PIXABAY_API_KEY가 없어서 이미지 없이 발행됩니다. Streamlit Secrets에 추가해주세요.")
+                    else:
+                        en_kw = _translate_keyword(kw)
+                        st.info(f"🔍 이미지 검색 키워드: **{en_kw}** (원본: {kw})")
+                        image_urls = _fetch_ai_images(kw, count=5)
+                        if image_urls:
+                            st.success(f"✅ 이미지 {len(image_urls)}장 준비됨")
+                        else:
+                            st.warning("⚠️ Pixabay 이미지를 찾지 못했습니다. 이미지 없이 발행됩니다.")
+
+                    result = post_to_blogger(BLOGGER_ID, title, body, labels, image_keyword=kw)
                     post_url = result.get("url", "")
                     st.success(f"발행 완료!")
                     st.markdown(f"[{title}]({post_url})")

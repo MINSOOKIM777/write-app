@@ -178,7 +178,7 @@ def _translate_keyword(keyword: str) -> str:
             c = _Groq(api_key=_key)
             r = c.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": f"Translate this Korean dish name to English (1-3 words only, exact dish name): {keyword}"}],
+                messages=[{"role": "user", "content": f"Translate this Korean food/dish to English for Pixabay image search. Give the most searchable English term (2-4 words). Examples: 김치찌개→kimchi stew, 불고기→Korean bulgogi beef, 장조림→braised soy beef, 멸치볶음→stir fried anchovies. Now translate: {keyword}"}],
                 max_tokens=15,
             )
             return r.choices[0].message.content.strip().strip('"').split("\n")[0]
@@ -188,44 +188,19 @@ def _translate_keyword(keyword: str) -> str:
 
 
 def _fetch_ai_images(keyword: str, count: int = 5) -> list[str]:
-    """Google Custom Search API로 음식 이미지 검색."""
-    api_key = _get_secret("GOOGLE_SEARCH_API_KEY")
-    cse_id = _get_secret("GOOGLE_CSE_ID")
-
-    if not api_key or not cse_id:
-        # fallback: Pixabay
-        px_key = _get_secret("PIXABAY_API_KEY")
-        if px_key:
-            en_kw = _translate_keyword(keyword)
-            try:
-                r = requests.get(
-                    "https://pixabay.com/api/",
-                    params={"key": px_key, "q": f"{en_kw} food", "image_type": "photo", "per_page": count, "category": "food"},
-                    timeout=8,
-                )
-                hits = r.json().get("hits", [])
-                return [h["webformatURL"] for h in hits[:count]]
-            except Exception:
-                pass
+    """Pixabay에서 음식 이미지 검색."""
+    px_key = _get_secret("PIXABAY_API_KEY")
+    if not px_key:
         return []
-
-    en_keyword = _translate_keyword(keyword)
+    en_kw = _translate_keyword(keyword)
     try:
         r = requests.get(
-            "https://www.googleapis.com/customsearch/v1",
-            params={
-                "key": api_key,
-                "cx": cse_id,
-                "q": f"{en_keyword} food recipe",
-                "searchType": "image",
-                "imgType": "photo",
-                "num": count,
-                "safe": "active",
-            },
-            timeout=10,
+            "https://pixabay.com/api/",
+            params={"key": px_key, "q": f"{en_kw} food dish", "image_type": "photo", "per_page": count, "category": "food", "safesearch": "true"},
+            timeout=8,
         )
-        items = r.json().get("items", [])
-        return [item["link"] for item in items[:count]]
+        hits = r.json().get("hits", [])
+        return [h["webformatURL"] for h in hits[:count]]
     except Exception:
         return []
 

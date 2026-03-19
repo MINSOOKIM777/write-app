@@ -509,7 +509,7 @@ with blogger_tab:
             try:
                 b_inp = GenerateInput(
                     industry=b_industry,
-                    blog_platform="tistory",
+                    blog_platform="naver",
                     topic=b_topic.strip(),
                     keywords=[k.strip() for k in b_keywords.split(",") if k.strip()],
                     tone=b_tone.strip(),
